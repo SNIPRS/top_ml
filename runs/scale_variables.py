@@ -121,15 +121,15 @@ class Utilities:
         return maxmean 
     
     def jet_existence_dict(): # For all phi variables
-    dic = {}
-    for key in phi_keys:
-        variable = key.split('_')[0]
-        if bool(re.match('^j[0-9]+$', variable)): # If the variable is a jet
-            v = np.array(dataset.get(variable + '_pt'))[0:crop0]
-            dic[key] = (v>1)*1
-        else:
-            dic[key] = np.ones(crop0, dtype=int)
-    return dic
+    	dic = {}
+    	for key in phi_keys:
+        	variable = key.split('_')[0]
+        	if bool(re.match('^j[0-9]+$', variable)): # If the variable is a jet
+            		v = np.array(dataset.get(variable + '_pt'))[0:crop0]
+            		dic[key] = (v>1)*1
+        	else:
+            		dic[key] = np.ones(crop0, dtype=int)
+    	return dic
 
     def test_inverse():
         pass
@@ -180,7 +180,7 @@ class Scale_variables:
                 names.append(key +'-sin')
                 names.append(key +'-cos')
             else:
-                elif method == 'phi_0':
+                if method == 'phi_0':
                     max0, mean = maxmean_dict['phi']
                     exist = exist_dict[key]
                     z = Transform.phi1_transform(var, max0, mean, exist)

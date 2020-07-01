@@ -9,10 +9,9 @@ import h5py
 import tensorflow.keras.backend as K
 import re
 
+from __main__ import *
 
 lep_phi = np.array(dataset.get('lep_phi'))[0:crop0]
-
-
 
 class Transform:
     def phi_transform(arr, max0, mean, exist=None):
@@ -130,9 +129,6 @@ class Utilities:
         	else:
             		dic[key] = np.ones(crop0, dtype=int)
     	return dic
-
-    def test_inverse():
-        pass
     
     
 # import stats! 
@@ -146,19 +142,23 @@ inverse_method_map = {'sincos': Transform.invphi3_transform, 'linear_sincos': Tr
              'phi_pi': Transform.invphi2_transform}
 
 class Scale_variables:
-    def final_maxmean(array):
+    def __init__(self):
+        self.maxmean_dict = Utilities.get_maxmean_dict()
+    
+    def final_maxmean(self,array):
         means = np.mean(array, axis=0)
         array = array - means
         maxs = np.max(np.abs(array), axis=0)
         maxs = maxs + (maxs==0.0)*1
         array = array/maxs
         maxmean = np.stack([maxs, means], axis=1)
-        return array, maxmean 
+        return (array, maxmean) 
 
-    def inverse_final_maxmean(array, maxmean0):
+    def inverse_final_maxmean(self, array, maxmean0):
         return array*maxmean0[:,0] + maxmean0[:,1]
 
-    def scale_arrays(keys, maxmean_dict, methods, end_maxmean=False):
+    def scale_arrays(self, keys, methods, end_maxmean):
+        maxmean_dict = self.maxmean_dict 
         names = []
         exist_dict = Utilities.jet_existence_dict()
         lep_phi = np.array(dataset.get('lep_phi'))[0:crop0]
@@ -196,7 +196,7 @@ class Scale_variables:
                     else:
                         z = Transform.meanmax_transform(var, max0, mean)
                 else:
-                    raise NotImplementedError('oof')
+                    raise NotImplementedError(method)
                 arrays.append(z)
                 names.append(key)
         arrays = np.stack(arrays, axis=1)
@@ -205,9 +205,9 @@ class Scale_variables:
         else:
             return arrays, names
 
-    def invscale_arrays(keys, arrays, maxmean_dict, names, methods, maxmean0=None):
-        if maxmean0 != None:
-            arrays = self.inverse_final_maxmean(arrays, maxmean0)
+    def invscale_arrays(self, keys, arrays, names, methods, maxmean0):
+        maxmean_dict = self.maxmean_dict 
+        arrays = self.inverse_final_maxmean(arrays, maxmean0)
         exist_dict = Utilities.jet_existence_dict()
         total = []
         i = 0
@@ -223,21 +223,22 @@ class Scale_variables:
                 zsin = arrays[:,i]
                 zcos = arrays[:,i+1]
                 if method == 'sincos':
-                    total.append(Transform.invphi3_transform(zsin, zcos, max0, mean, exist))
+                    total.append(Transform.invphi3_transform((zsin, zcos), max0, mean, exist))
                 else:
-                    total.append(Transform.invphi4_transform(zsin, zcos, max0, mean, exist))
+                    total.append(Transform.invphi4_transform((zsin, zcos), max0, mean, exist))
                 i+=2
                 j+=1  
             else:
                 z=arrays[:,i]
                 if method == 'divmax' or method == 'meanmax':
                     max0, mean = maxmean_dict['pt'] if full_key in pt_keys else (
-                        maxmean_dict['m'] if full_key in m_keys else maxmean_dict[key.split('_')[1]])
+                        maxmean_dict['m'] if full_key in m_keys else maxmean_dict[
+                            full_key.split('_')[1]])
                     if method == 'meanmax':
                         total.append(Transform.invmeanmax_transform(z, max0, mean))
                     else:
-                        total.append(Transform.invpt_transform)
-                if method == 'phi_0' or method == 'phi_pi':
+                        total.append(Transform.invpt_transform(z, max0))
+                elif method == 'phi_0' or method == 'phi_pi':
                     max0, mean = maxmean_dict[key]
                     exist = exist_dict[full_key]
                     if method == 'phi_0':
@@ -245,10 +246,19 @@ class Scale_variables:
                     else:
                         total.append(Transform.invphi2_transform(z, max0, mean, exist))
                 else:
-                    raise NotImplementedError('oof')
+                    raise NotImplementedError(method)
                 i+=1
                 j+=1
         return np.stack(total,axis=1)
+    
+    def test_inverse(self, keys, methods, end_maxmean):
+        (total, maxmean0), names = self.scale_arrays(keys, methods, end_maxmean)
+        inverse = self.invscale_arrays(keys, total, names, methods, maxmean0)
+        orig = [dataset.get(keys[i])[0:crop0] for i in range(len(keys))]
+        orig = np.stack(orig, axis=1)
+        diff = np.max(np.abs(orig - inverse))
+        return diff
+        
     
     
 

@@ -8,6 +8,8 @@ import scipy.stats as stats
 import h5py
 import tensorflow.keras.backend as K
 import re
+from scipy.special import boxcox1p
+from scipy.special import inv_boxcox1p
 
 from __main__ import *
 
@@ -85,6 +87,7 @@ class Transform:
         x = x-2*np.pi*(x>pi)
         return x
     
+    
     def pt_transform(arr, max0, mean=None, exist=None):
         return arr/max0
 
@@ -98,6 +101,17 @@ class Transform:
 
     def invmeanmax_transform(z, max0, mean, exist=None):
         return z*max0+mean
+    
+    def boxcox_transform(arr, lamb, mean=None, exist=None):
+        box = boxcox1p(arr, lamb)
+        maxbox = np.max(box)
+        z = box/maxbox
+        return (z, maxbox)
+
+    def invboxcox_transform(z, lamb, maxbox, exist=None):
+        box = z*maxbox
+        arr = inv_boxcox1p(box, lamb)
+        return arr
 
 
 
@@ -130,20 +144,20 @@ class Utilities:
             		dic[key] = np.ones(crop0, dtype=int)
     	return dic
     
-    
-# import stats! 
 method_map = {'sincos': Transform.phi3_transform, 'linear_sincos': Transform.phi4_transform,
              'divmax': Transform.pt_transform, 'meanmax': Transform.meanmax_transform,
              'ppf': Transform.phi_transform, 'phi_0':Transform.phi1_transform,
-             'phi_pi': Transform.phi2_transform}
+             'phi_pi': Transform.phi2_transform, 'boxcox':Transform.boxcox_transform}
 inverse_method_map = {'sincos': Transform.invphi3_transform, 'linear_sincos': Transform.invphi4_transform,
              'divmax': Transform.invpt_transform, 'meanmax': Transform.meanmax_transform,
              'ppf': Transform.invphi_transform, 'phi_0':Transform.invphi1_transform,
-             'phi_pi': Transform.invphi2_transform}
+             'phi_pi': Transform.invphi2_transform, 'boxcox':Transform.boxcox_transform}
 
 class Scale_variables:
     def __init__(self):
         self.maxmean_dict = Utilities.get_maxmean_dict()
+        self.boxcox_max = {}
+        self.boxcox_lamb = 0.8
     
     def final_maxmean(self,array):
         means = np.mean(array, axis=0)
@@ -195,6 +209,10 @@ class Scale_variables:
                         z = Transform.pt_transform(var, max0, mean)
                     else:
                         z = Transform.meanmax_transform(var, max0, mean)
+                elif method == 'boxcox':
+                    lamb = self.boxcox_lamb
+                    z, maxbox = Transform.boxcox_transform(var, lamb)
+                    self.boxcox_max[key] = maxbox
                 else:
                     raise NotImplementedError(method)
                 arrays.append(z)
@@ -245,6 +263,10 @@ class Scale_variables:
                         total.append(Transform.invphi1_transform(z, max0, mean, exist))
                     else:
                         total.append(Transform.invphi2_transform(z, max0, mean, exist))
+                elif method == 'boxcox':
+                    maxbox = self.boxcox_max[full_key]
+                    lamb = self.boxcox_lamb
+                    total.append(Transform.invboxcox_transform(z, lamb, maxbox, exist=None))
                 else:
                     raise NotImplementedError(method)
                 i+=1

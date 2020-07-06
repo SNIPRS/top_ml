@@ -87,6 +87,21 @@ class Transform:
         x = x-2*np.pi*(x>pi)
         return x
     
+    def phi5_transform(arr, max0, mean, exist):
+        w = (arr - lep_phi*exist) % (2*np.pi)
+        sin = 2/np.pi*np.arcsin(np.sin(w)) - 1.2*(1-exist)
+        cos = np.cos(w) - 2.2*(1-exist)
+        return (sin, cos)
+
+    def invphi5_transform(z, max0, mean, exist):
+        pi = np.pi
+        sin, cos = z[0] + 1.2*(1-exist), z[1] + 2.2*(1-exist)
+        sin0, cos0 = np.sin(pi/2*sin),  cos
+        w = np.arctan2(sin0, cos0)
+        x = (w + lep_phi*exist) % (2*pi)
+        x = x-2*np.pi*(x>pi)
+        return x
+    
     
     def pt_transform(arr, max0, mean=None, exist=None):
         return arr/max0
@@ -147,11 +162,13 @@ class Utilities:
 method_map = {'sincos': Transform.phi3_transform, 'linear_sincos': Transform.phi4_transform,
              'divmax': Transform.pt_transform, 'meanmax': Transform.meanmax_transform,
              'ppf': Transform.phi_transform, 'phi_0':Transform.phi1_transform,
-             'phi_pi': Transform.phi2_transform, 'boxcox':Transform.boxcox_transform}
+             'phi_pi': Transform.phi2_transform, 'boxcox':Transform.boxcox_transform,
+              'cos_linear_sin':Transform.phi5_transform}
 inverse_method_map = {'sincos': Transform.invphi3_transform, 'linear_sincos': Transform.invphi4_transform,
              'divmax': Transform.invpt_transform, 'meanmax': Transform.meanmax_transform,
              'ppf': Transform.invphi_transform, 'phi_0':Transform.invphi1_transform,
-             'phi_pi': Transform.invphi2_transform, 'boxcox':Transform.boxcox_transform}
+             'phi_pi': Transform.invphi2_transform, 'boxcox':Transform.boxcox_transform,
+                      'cos_linear_sin':Transform.phi5_transform}
 
 class Scale_variables:
     def __init__(self):
@@ -182,11 +199,13 @@ class Scale_variables:
             key = keys[i]
             method = methods[i]
             var = np.array(dataset.get(key))[0:crop0]
-            if method == 'sincos' or method == 'linear_sincos':
+            if method == 'sincos' or method == 'linear_sincos' or method == 'cos_linear_sin':
                 max0, mean = None, None
                 exist = exist_dict[key]
                 if method =='sincos':
                     zsin, zcos = Transform.phi3_transform(var, max0, mean, exist)
+                elif method == 'cos_linear_sin':
+                    zsin, zcos = Transform.phi5_transform(var, max0, mean, exist)
                 else:
                     zsin, zcos = Transform.phi4_transform(var, max0, mean, exist)
                 arrays.append(zsin)
@@ -234,7 +253,7 @@ class Scale_variables:
             full_key = names[i]
             key = names[i].split('_')[1]
             method = methods[j]
-            if method == 'sincos' or method == 'linear_sincos':
+            if method == 'sincos' or method == 'linear_sincos' or method=='cos_linear_sin':
                 zsin = arrays
                 max0, mean = maxmean_dict['phi']
                 exist = exist_dict[full_key.split('-')[0]]
@@ -242,6 +261,8 @@ class Scale_variables:
                 zcos = arrays[:,i+1]
                 if method == 'sincos':
                     total.append(Transform.invphi3_transform((zsin, zcos), max0, mean, exist))
+                elif method == 'cos_linear_sin':
+                    total.append(Transform.invphi5_transform((zsin, zcos), max0, mean, exist))
                 else:
                     total.append(Transform.invphi4_transform((zsin, zcos), max0, mean, exist))
                 i+=2
@@ -280,7 +301,37 @@ class Scale_variables:
         orig = np.stack(orig, axis=1)
         diff = np.max(np.abs(orig - inverse))
         return diff
+
+class Shape_timesteps:
+    def __init__(self):
+        self.num_jet_features = None
+        self.num_jets = None
+        self.num_other_Xfeatures = None
+        self.num_Ytimesteps = None
+        self.num_Yfeatures = None
+    
+    def create_mask(self):
+        exist = Utilities.jet_existence_dict()
+        mask = [exist[list(exist.keys())[i]] for i in range(num_jets)] 
+        samples_jets = np.stack(mask,axis=1)
+        samples_jets = samples_jets.reshape((samples_jets.shape[0], samples_jets.shape[1], 1))
+        return np.repeat(samples_jets, self.num_jet_features, axis=2) # 5 feature mask
+    
+    def reshape_X(self, X_total, X_names, timestep_other=False):
+        jet_names = list(filter(lambda a: bool(re.match('^j[0-9]+$', a.split('_')[0])), X_names))
+        other_names = list(filter(lambda a: a not in jet_names, X_names))
+        self.num_jet_features = len(list(filter(lambda a: a.split('_')[0]=='j1',jet_names)))
+        self.num_jets = len(jet_names)/self.num_jet_features
+        self.num_other_Xfeatures = len(other_names)
+        # mask = self.create_mask()
+        X_jets = X_total[:, 0:len(jet_names)]
+        X_other = X_total[:, len(jet_names):]
+        X_timestep_jets = np.stack(np.split(X_jets, self.num_jets, axis=1), axis=1)
+        if timestep_other:
+            X_other = X_other.reshape(X_other.shape[0], 1, X_other.shape[1])
+        return X_timestep_jets, X_other
         
+       
     
     
 

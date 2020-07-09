@@ -89,16 +89,37 @@ class Transform:
     
     def phi5_transform(arr, max0, mean, exist):
         w = (arr - lep_phi*exist) % (2*np.pi)
+        w = w -2*np.pi*(w>np.pi)
         sin = 2/np.pi*np.arcsin(np.sin(w)) - 1.2*(1-exist)
-        cos = np.cos(w) - 2.2*(1-exist)
-        return (sin, cos)
+        cos = 2/np.pi*np.arcsin(np.cos(w)) - 2.2*(1-exist)
+        return (sin, cos, w)
 
     def invphi5_transform(z, max0, mean, exist):
         pi = np.pi
-        sin, cos = z[0] + 1.2*(1-exist), z[1] + 2.2*(1-exist)
-        sin0, cos0 = np.sin(pi/2*sin),  cos
+        sin, cos, w0 = z[0] + 1.2*(1-exist), z[1] + 2.2*(1-exist), z[2]
+        sin0, cos0 = np.sin(pi/2*sin),  np.sin(pi/2*cos)
         w = np.arctan2(sin0, cos0)
+        w = (w + w0)/2
         x = (w + lep_phi*exist) % (2*pi)
+        x = x-2*np.pi*(x>pi)
+        return x
+    
+    def phi6_transform(arr, max0, mean, exist):
+        arr = arr - np.pi
+        w = (arr - lep_phi*exist) % (2*np.pi)
+        w = w -2*np.pi*(w>np.pi)
+        sin = 2/np.pi*np.arcsin(np.sin(w)) - 1.2*(1-exist)
+        cos = 2/np.pi*np.arcsin(np.cos(w)) - 2.2*(1-exist)
+        return (sin, cos, w)
+
+    def invphi6_transform(z, max0, mean, exist):
+        pi = np.pi
+        sin, cos, w0 = z[0] + 1.2*(1-exist), z[1] + 2.2*(1-exist), z[2]
+        sin0, cos0 = np.sin(pi/2*sin),  np.sin(pi/2*cos)
+        w = np.arctan2(sin0, cos0)
+        w = (w + w0)/2
+        x = (w + lep_phi*exist) % (2*pi)
+        x = x + np.pi 
         x = x-2*np.pi*(x>pi)
         return x
     
@@ -118,7 +139,7 @@ class Transform:
         return z*max0+mean
     
     def boxcox_transform(arr, lamb, mean=None, exist=None):
-        box = boxcox1p(arr, lamb)
+        box = boxcox1p(arr + 30, lamb)
         maxbox = np.max(box)
         z = box/maxbox
         return (z, maxbox)
@@ -126,7 +147,7 @@ class Transform:
     def invboxcox_transform(z, lamb, maxbox, exist=None):
         box = z*maxbox
         arr = inv_boxcox1p(box, lamb)
-        return arr
+        return arr - 30 
 
 
 
@@ -163,18 +184,19 @@ method_map = {'sincos': Transform.phi3_transform, 'linear_sincos': Transform.phi
              'divmax': Transform.pt_transform, 'meanmax': Transform.meanmax_transform,
              'ppf': Transform.phi_transform, 'phi_0':Transform.phi1_transform,
              'phi_pi': Transform.phi2_transform, 'boxcox':Transform.boxcox_transform,
-              'cos_linear_sin':Transform.phi5_transform}
+              'linear_sincos_orig':Transform.phi5_transform, 'linear_sincos_pi':Transform.phi6_transform}
 inverse_method_map = {'sincos': Transform.invphi3_transform, 'linear_sincos': Transform.invphi4_transform,
              'divmax': Transform.invpt_transform, 'meanmax': Transform.meanmax_transform,
              'ppf': Transform.invphi_transform, 'phi_0':Transform.invphi1_transform,
              'phi_pi': Transform.invphi2_transform, 'boxcox':Transform.boxcox_transform,
-                      'cos_linear_sin':Transform.phi5_transform}
+                      'linear_sincos_orig':Transform.phi5_transform, 'linear_sincos_pi':Transform.invphi6_transform}
 
 class Scale_variables:
     def __init__(self):
         self.maxmean_dict = Utilities.get_maxmean_dict()
         self.boxcox_max = {}
-        self.boxcox_lamb = 0.8
+        self.boxcox_ptlamb = 0.2
+        self.boxcox_mlamb = -1
     
     def final_maxmean(self,array):
         means = np.mean(array, axis=0)
@@ -199,19 +221,30 @@ class Scale_variables:
             key = keys[i]
             method = methods[i]
             var = np.array(dataset.get(key))[0:crop0]
-            if method == 'sincos' or method == 'linear_sincos' or method == 'cos_linear_sin':
+            if method == 'sincos' or method == 'cos_linear_sin':
                 max0, mean = None, None
                 exist = exist_dict[key]
                 if method =='sincos':
-                    zsin, zcos = Transform.phi3_transform(var, max0, mean, exist)
-                elif method == 'cos_linear_sin':
-                    zsin, zcos = Transform.phi5_transform(var, max0, mean, exist)
+                    zsin, zcos = Transform.phi4_transform(var, max0, mean, exist)
                 else:
                     zsin, zcos = Transform.phi4_transform(var, max0, mean, exist)
                 arrays.append(zsin)
                 arrays.append(zcos)
                 names.append(key +'-sin')
                 names.append(key +'-cos')
+            elif method == 'linear_sincos_orig':
+                max0, mean = None, None
+                exist = exist_dict[key]
+                if 'tl' in key or 'wl' in key:
+                    zsin, zcos, w = Transform.phi5_transform(var, max0, mean, exist)
+                else:
+                    zsin, zcos, w = Transform.phi6_transform(var, max0, mean, exist)
+                arrays.append(zsin)
+                arrays.append(zcos)
+                arrays.append(w)
+                names.append(key +'-sin')
+                names.append(key +'-cos')
+                names.append(key + '-alone')
             else:
                 if method == 'phi_0':
                     max0, mean = maxmean_dict['phi']
@@ -229,7 +262,10 @@ class Scale_variables:
                     else:
                         z = Transform.meanmax_transform(var, max0, mean)
                 elif method == 'boxcox':
-                    lamb = self.boxcox_lamb
+                    if "pt" in key:
+                        lamb = self.boxcox_ptlamb
+                    else:
+                        lamb = self.boxcox_mlamb
                     z, maxbox = Transform.boxcox_transform(var, lamb)
                     self.boxcox_max[key] = maxbox
                 else:
@@ -253,20 +289,29 @@ class Scale_variables:
             full_key = names[i]
             key = names[i].split('_')[1]
             method = methods[j]
-            if method == 'sincos' or method == 'linear_sincos' or method=='cos_linear_sin':
-                zsin = arrays
+            if method == 'sincos' or method=='cos_linear_sin':
                 max0, mean = maxmean_dict['phi']
                 exist = exist_dict[full_key.split('-')[0]]
                 zsin = arrays[:,i]
                 zcos = arrays[:,i+1]
                 if method == 'sincos':
-                    total.append(Transform.invphi3_transform((zsin, zcos), max0, mean, exist))
-                elif method == 'cos_linear_sin':
-                    total.append(Transform.invphi5_transform((zsin, zcos), max0, mean, exist))
+                    total.append(Transform.invphi4_transform((zsin, zcos), max0, mean, exist))
                 else:
                     total.append(Transform.invphi4_transform((zsin, zcos), max0, mean, exist))
                 i+=2
-                j+=1  
+                j+=1
+            elif method == 'linear_sincos_orig': 
+                max0, mean = maxmean_dict['phi']
+                exist = exist_dict[full_key.split('-')[0]]
+                zsin = arrays[:,i]
+                zcos = arrays[:,i+1]
+                w = arrays[:, i+2]
+                if 'tl' in key or 'wl' in key:
+                    total.append(Transform.invphi5_transform((zsin, zcos, w), max0, mean, exist)) 
+                else:
+                    total.append(Transform.invphi6_transform((zsin, zcos, w), max0, mean, exist))
+                i += 3
+                j += 1
             else:
                 z=arrays[:,i]
                 if method == 'divmax' or method == 'meanmax':
@@ -286,7 +331,10 @@ class Scale_variables:
                         total.append(Transform.invphi2_transform(z, max0, mean, exist))
                 elif method == 'boxcox':
                     maxbox = self.boxcox_max[full_key]
-                    lamb = self.boxcox_lamb
+                    if "pt" in full_key:
+                        lamb = self.boxcox_ptlamb
+                    else:
+                        lamb = self.boxcox_mlamb
                     total.append(Transform.invboxcox_transform(z, lamb, maxbox, exist=None))
                 else:
                     raise NotImplementedError(method)
@@ -331,6 +379,33 @@ class Shape_timesteps:
             X_other = X_other.reshape(X_other.shape[0], 1, X_other.shape[1])
         return X_timestep_jets, X_other
         
+
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
        
     
     

@@ -1,12 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-from tensorflow.keras import regularizers 
 import scipy.stats as stats
 import h5py
-import tensorflow.keras.backend as K
 import re
 from scipy.special import boxcox1p
 from scipy.special import inv_boxcox1p
@@ -14,13 +10,34 @@ from scipy.special import inv_boxcox1p
 from __main__ import *
 
 lep_phi = np.array(dataset.get('lep_phi'))[0:crop0]
-
+    
+    
 class Transform:
+    def polar_to_cart(pt, eta, phi):
+        px = pt*np.cos(phi)
+        py = pt*np.sin(phi)
+        pz = pt*np.sinh(eta)
+        p = np.sqrt(px**2 + py**2 + pz**2) 
+        # if p is 0 then eta and phi are also 0 due to 0 padding
+#         if np.min(p) <= 0:
+#             return 0*px, 0*px, 0*px
+        return px, py, pz
+        
+    def cart_to_polar(px, py, pz): 
+        pt = np.sqrt(px**2 + py**2)
+        phi = np.arctan2(py, px)
+        p = np.sqrt(px**2 + py**2 + pz**2) 
+        p1 = p + (p==0)
+#         if np.min(p) <= 0:
+#             return 0*px, 0*px, 0*px
+        eta = np.arcsinh(pz/p1)*(p>0)
+        return pt, eta, phi
+        
     def phi_transform(arr, max0, mean, exist=None):
         arr = (arr-mean)
         arr = arr/max0/1.01/2+0.5
         z = stats.norm.ppf(arr)/2.5
-        return z 
+        return z
 
     def invphi_transform(z, max0, mean, exist=None):
         arr = stats.norm.cdf(2.5*z)
@@ -170,32 +187,32 @@ class Utilities:
         return maxmean 
     
     def jet_existence_dict(): # For all phi variables
-    	dic = {}
-    	for key in phi_keys:
-        	variable = key.split('_')[0]
-        	if bool(re.match('^j[0-9]+$', variable)): # If the variable is a jet
-            		v = np.array(dataset.get(variable + '_pt'))[0:crop0]
-            		dic[key] = (v>1)*1
-        	else:
-            		dic[key] = np.ones(crop0, dtype=int)
-    	return dic
+        dic = {}
+        for key in phi_keys:
+            variable = key.split('_')[0]
+            if bool(re.match('^j[0-9]+$', variable)): # If the variable is a jet
+                v = np.array(dataset.get(variable + '_pt'))[0:crop0]
+                dic[key] = (v>1)*1
+            else:
+                dic[key] = np.ones(crop0, dtype=int)
+        return dic
     
-method_map = {'sincos': Transform.phi3_transform, 'linear_sincos': Transform.phi4_transform,
-             'divmax': Transform.pt_transform, 'meanmax': Transform.meanmax_transform,
-             'ppf': Transform.phi_transform, 'phi_0':Transform.phi1_transform,
-             'phi_pi': Transform.phi2_transform, 'boxcox':Transform.boxcox_transform,
-              'linear_sincos_orig':Transform.phi5_transform, 'linear_sincos_pi':Transform.phi6_transform}
-inverse_method_map = {'sincos': Transform.invphi3_transform, 'linear_sincos': Transform.invphi4_transform,
-             'divmax': Transform.invpt_transform, 'meanmax': Transform.meanmax_transform,
-             'ppf': Transform.invphi_transform, 'phi_0':Transform.invphi1_transform,
-             'phi_pi': Transform.invphi2_transform, 'boxcox':Transform.boxcox_transform,
-                      'linear_sincos_orig':Transform.phi5_transform, 'linear_sincos_pi':Transform.invphi6_transform}
+# method_map = {'sincos': Transform.phi3_transform, 'linear_sincos': Transform.phi4_transform,
+#              'divmax': Transform.pt_transform, 'meanmax': Transform.meanmax_transform,
+#              'ppf': Transform.phi_transform, 'phi_0':Transform.phi1_transform,
+#              'phi_pi': Transform.phi2_transform, 'boxcox':Transform.boxcox_transform,
+#               'linear_sincos_orig':Transform.phi5_transform, 'linear_sincos_pi':Transform.phi6_transform}
+# inverse_method_map = {'sincos': Transform.invphi3_transform, 'linear_sincos': Transform.invphi4_transform,
+#              'divmax': Transform.invpt_transform, 'meanmax': Transform.meanmax_transform,
+#              'ppf': Transform.invphi_transform, 'phi_0':Transform.invphi1_transform,
+#              'phi_pi': Transform.invphi2_transform, 'boxcox':Transform.boxcox_transform,
+#                       'linear_sincos_orig':Transform.phi5_transform, 'linear_sincos_pi':Transform.invphi6_transform}
 
 class Scale_variables:
     def __init__(self):
         self.maxmean_dict = Utilities.get_maxmean_dict()
         self.boxcox_max = {}
-        self.boxcox_ptlamb = 0.2
+        self.boxcox_ptlamb = 0.8
         self.boxcox_mlamb = -1
     
     def final_maxmean(self,array):
@@ -217,61 +234,75 @@ class Scale_variables:
         lep_phi = np.array(dataset.get('lep_phi'))[0:crop0]
     
         arrays = []
-        for i in range(len(keys)):
+        i = 0
+        while i < len(keys):
             key = keys[i]
             method = methods[i]
             var = np.array(dataset.get(key))[0:crop0]
-            if method == 'sincos' or method == 'cos_linear_sin':
-                max0, mean = None, None
-                exist = exist_dict[key]
-                if method =='sincos':
-                    zsin, zcos = Transform.phi4_transform(var, max0, mean, exist)
-                else:
-                    zsin, zcos = Transform.phi4_transform(var, max0, mean, exist)
-                arrays.append(zsin)
-                arrays.append(zcos)
-                names.append(key +'-sin')
-                names.append(key +'-cos')
-            elif method == 'linear_sincos_orig':
-                max0, mean = None, None
-                exist = exist_dict[key]
-                if 'tl' in key or 'wl' in key:
-                    zsin, zcos, w = Transform.phi5_transform(var, max0, mean, exist)
-                else:
-                    zsin, zcos, w = Transform.phi6_transform(var, max0, mean, exist)
-                arrays.append(zsin)
-                arrays.append(zcos)
-                arrays.append(w)
-                names.append(key +'-sin')
-                names.append(key +'-cos')
-                names.append(key + '-alone')
+            if method == 'raw_cart': # only apply this to pt
+                key1 = keys[i+1]
+                key2 = keys[i+2]
+                var1 = np.array(dataset.get(key1))[0:crop0]
+                var2 = np.array(dataset.get(key2))[0:crop0]
+                px, py, pz = Transform.polar_to_cart(var, var1, var2)
+                short = key.split('_')[0]
+                names = names + [short + '_px', short + '_py', short + '_pz']
+                arrays  = arrays + [px, py, pz]
+                i+=3
             else:
-                if method == 'phi_0':
-                    max0, mean = maxmean_dict['phi']
+                if method == 'sincos' or method == 'cos_linear_sin':
+                    max0, mean = None, None
                     exist = exist_dict[key]
-                    z = Transform.phi1_transform(var, max0, mean, exist)
-                elif method == 'phi_pi':
-                    max0, mean = maxmean_dict['phi']
+                    if method =='sincos':
+                        zsin, zcos = Transform.phi4_transform(var, max0, mean, exist)
+                    else:
+                        zsin, zcos = Transform.phi4_transform(var, max0, mean, exist)
+                    arrays.append(zsin)
+                    arrays.append(zcos)
+                    names.append(key +'-sin')
+                    names.append(key +'-cos')
+                elif method == 'linear_sincos_orig':
+                    max0, mean = None, None
                     exist = exist_dict[key]
-                    z = Transform.phi2_transform(var, max0, mean, exist)
-                elif method == 'divmax' or method == 'meanmax':
-                    max0, mean = maxmean_dict['pt'] if key in pt_keys else (
-                        maxmean_dict['m'] if key in m_keys else maxmean_dict[key.split('_')[1]])
-                    if method== 'divmax':
-                        z = Transform.pt_transform(var, max0, mean)
+                    if 'tl' in key or 'wl' in key:
+                        zsin, zcos, w = Transform.phi5_transform(var, max0, mean, exist)
                     else:
-                        z = Transform.meanmax_transform(var, max0, mean)
-                elif method == 'boxcox':
-                    if "pt" in key:
-                        lamb = self.boxcox_ptlamb
-                    else:
-                        lamb = self.boxcox_mlamb
-                    z, maxbox = Transform.boxcox_transform(var, lamb)
-                    self.boxcox_max[key] = maxbox
+                        zsin, zcos, w = Transform.phi6_transform(var, max0, mean, exist)
+                    arrays.append(zsin)
+                    arrays.append(zcos)
+                    arrays.append(w)
+                    names.append(key +'-sin')
+                    names.append(key +'-cos')
+                    names.append(key +'-alone')
                 else:
-                    raise NotImplementedError(method)
-                arrays.append(z)
-                names.append(key)
+                    if method == 'phi_0':
+                        max0, mean = maxmean_dict['phi']
+                        exist = exist_dict[key]
+                        z = Transform.phi1_transform(var, max0, mean, exist)
+                    elif method == 'phi_pi':
+                        max0, mean = maxmean_dict['phi']
+                        exist = exist_dict[key]
+                        z = Transform.phi2_transform(var, max0, mean, exist)
+                    elif method == 'divmax' or method == 'meanmax':
+                        max0, mean = maxmean_dict['pt'] if key in pt_keys else (
+                            maxmean_dict['m'] if key in m_keys else maxmean_dict[key.split('_')[1]])
+                        if method== 'divmax':
+                            z = Transform.pt_transform(var, max0, mean)
+                        else:
+                            z = Transform.meanmax_transform(var, max0, mean)
+                    elif method == 'boxcox':
+                        if "pt" in key:
+                            lamb = self.boxcox_ptlamb
+                        else:
+                            lamb = self.boxcox_mlamb
+                        z, maxbox = Transform.boxcox_transform(var, lamb)
+                        self.boxcox_max[key] = maxbox
+                    else:
+                        raise NotImplementedError(method + " " + key)
+                    arrays.append(z)
+                    names.append(key)
+                i += 1 
+                
         arrays = np.stack(arrays, axis=1)
         if end_maxmean:
             return self.final_maxmean(arrays), names
@@ -300,6 +331,13 @@ class Scale_variables:
                     total.append(Transform.invphi4_transform((zsin, zcos), max0, mean, exist))
                 i+=2
                 j+=1
+            elif method == 'raw_cart':
+                px, py, pz = arrays[:,i], arrays[:,i+1], arrays[:,i+2]
+                pt, eta, phi = Transform.cart_to_polar(px, py, pz)
+                total = total + [pt, eta, phi]
+                i+= 3
+                j+= 3
+                
             elif method == 'linear_sincos_orig': 
                 max0, mean = maxmean_dict['phi']
                 exist = exist_dict[full_key.split('-')[0]]
@@ -337,7 +375,7 @@ class Scale_variables:
                         lamb = self.boxcox_mlamb
                     total.append(Transform.invboxcox_transform(z, lamb, maxbox, exist=None))
                 else:
-                    raise NotImplementedError(method)
+                    raise NotImplementedError(method + " " + key)
                 i+=1
                 j+=1
         return np.stack(total,axis=1)

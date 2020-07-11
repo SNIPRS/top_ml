@@ -32,6 +32,16 @@ class Transform:
 #             return 0*px, 0*px, 0*px
         eta = np.arcsinh(pz/p1)*(p>0)
         return pt, eta, phi
+    
+    def pxpy(pt, eta, phi):
+        px = pt*np.cos(phi)
+        py = pt*np.sin(phi)
+        return px, py, eta
+        
+    def inv_pxpy(px, py, eta): 
+        pt = np.sqrt(px**2 + py**2)
+        phi = np.arctan2(py, px)
+        return pt, eta, phi
         
     def phi_transform(arr, max0, mean, exist=None):
         arr = (arr-mean)
@@ -239,24 +249,27 @@ class Scale_variables:
             key = keys[i]
             method = methods[i]
             var = np.array(dataset.get(key))[0:crop0]
-            if method == 'raw_cart': # only apply this to pt
+            if method == 'raw_cart' or method =='pxpy': # only apply this to pt
                 key1 = keys[i+1]
                 key2 = keys[i+2]
                 var1 = np.array(dataset.get(key1))[0:crop0]
                 var2 = np.array(dataset.get(key2))[0:crop0]
-                px, py, pz = Transform.polar_to_cart(var, var1, var2)
-                short = key.split('_')[0]
-                names = names + [short + '_px', short + '_py', short + '_pz']
-                arrays  = arrays + [px, py, pz]
+                if method == 'raw_cart':
+                    px, py, pz = Transform.polar_to_cart(var, var1, var2)
+                    short = key.split('_')[0]
+                    names = names + [short + '_px', short + '_py', short + '_pz']
+                    arrays  = arrays + [px, py, pz]
+                else:
+                    px, py, eta = Transform.pxpy(var, var1, var2)
+                    short = key.split('_')[0]
+                    names = names + [short + '_px', short + '_py', short + '_eta']
+                    arrays  = arrays + [px, py, eta]
                 i+=3
             else:
-                if method == 'sincos' or method == 'cos_linear_sin':
+                if method == 'sincos':
                     max0, mean = None, None
                     exist = exist_dict[key]
-                    if method =='sincos':
-                        zsin, zcos = Transform.phi4_transform(var, max0, mean, exist)
-                    else:
-                        zsin, zcos = Transform.phi4_transform(var, max0, mean, exist)
+                    zsin, zcos = Transform.phi4_transform(var, max0, mean, exist)
                     arrays.append(zsin)
                     arrays.append(zcos)
                     names.append(key +'-sin')
@@ -325,10 +338,7 @@ class Scale_variables:
                 exist = exist_dict[full_key.split('-')[0]]
                 zsin = arrays[:,i]
                 zcos = arrays[:,i+1]
-                if method == 'sincos':
-                    total.append(Transform.invphi4_transform((zsin, zcos), max0, mean, exist))
-                else:
-                    total.append(Transform.invphi4_transform((zsin, zcos), max0, mean, exist))
+                total.append(Transform.invphi4_transform((zsin, zcos), max0, mean, exist))
                 i+=2
                 j+=1
             elif method == 'raw_cart':
@@ -337,7 +347,12 @@ class Scale_variables:
                 total = total + [pt, eta, phi]
                 i+= 3
                 j+= 3
-                
+            elif method =='pxpy':
+                px, py, eta = arrays[:,i], arrays[:,i+1], arrays[:,i+2]
+                pt, eta, phi = Transform.inv_pxpy(px, py, eta)
+                total = total + [pt, eta, phi]
+                i+= 3
+                j+= 3
             elif method == 'linear_sincos_orig': 
                 max0, mean = maxmean_dict['phi']
                 exist = exist_dict[full_key.split('-')[0]]

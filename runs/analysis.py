@@ -1,7 +1,3 @@
-from __main__ import *
-import matplotlib.pyplot as plt
-import numpy as np 
-
 class Analysis:
     def __init__(self):
         self.crop = 100
@@ -48,21 +44,23 @@ class Analysis:
             MSE = 1/compare[:,i].size*np.sum((diff)**2)
             print("{0} MSE : ".format(names[i]), '%.10f'%MSE)
     
-    def difference_histogram(self, compare, true, names, wrap_phi):
+    def difference_histogram(self, compare, true, names, wrap_phi, bins):
         plt.figure(figsize=(self.fsize*2,self.fsize*len(names)))
         for i in range(len(names)):
             plt.subplot(len(names), 1, i+1)
             diff = true[:,i] - compare[:,i]
-            if wrap_phi and "phi" in names[i]:
-                diff = self.wrap_phi(diff)
-            hist0, bin_edges = np.histogram(true[:, i], bins=self.histogram_bins)
-            plt.hist(diff, self.histogram_bins, histtype='step', color='purple', label='true - predicted', density=True)
+            hist0, bin_edges = np.histogram(true[:, i], bins=40)
+            if bins[i] is None:
+                hbins = bin_edges
+            else:
+                hbins = bins[i]
+            plt.hist(diff, hbins, histtype='step', color='purple', label='true - predicted', density=True)
             plt.xlabel("Difference (Mean: {0}, Std: {1})".format(np.mean(diff), np.std(diff)))
             plt.title(names[i])
             plt.legend()
             plt.ylabel('Frequency')
             
-    def variable_histogram(self, compare, true, names, wrap_phi): 
+    def variable_histogram(self, compare, true, names, wrap_phi, bins): 
         plt.figure(figsize=(self.fsize*2,self.fsize*len(names)))
         for i in range(len(names)):
             plt.subplot(len(names), 1, i+1)
@@ -71,9 +69,15 @@ class Analysis:
             if wrap_phi and "phi" in names[i]:
                 compare_small = self.wrap_phi(compare_small)
                 true_small = self.wrap_phi(true_small)
-            # hist, edges = np.histogram(true_small, self.histogram_bins)
-            plt.hist(true_small, self.histogram_bins, histtype='step', color='b', label='true values', density=True)
-            plt.hist(compare_small, self.histogram_bins, histtype='step', color='r', label='predictions', density=True)
+            hist0, bin_edges = np.histogram(true[:, i], bins=40)
+            
+            if bins[i] is None:
+                hbins = bin_edges
+            else:
+                hbins = bins[i]
+                
+            plt.hist(true_small, hbins, histtype='step', color='b', label='true values', density=False)
+            plt.hist(compare_small, hbins, histtype='step', color='r', label='predictions', density=False)
             plt.xlabel(names[i])
             plt.title(names[i])
             plt.legend()

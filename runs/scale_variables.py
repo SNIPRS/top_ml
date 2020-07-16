@@ -24,7 +24,7 @@ class Scale_variables:
     def __init__(self):
         self.maxmean_dict = Utilities.get_maxmean_dict()
         self.boxcox_max = {}
-        self.boxcox_ptlamb = 0.8
+        self.boxcox_ptlamb = 1.4
         self.boxcox_mlamb = -1
     
     def final_maxmean(self,array, names):
@@ -58,7 +58,7 @@ class Scale_variables:
             key = keys[i]
             method = methods[i]
             var = np.array(dataset.get(key))[0:crop0]
-            if method == 'raw_cart' or method =='pxpy' or method=='cart': # only apply this to pt
+            if method == 'raw_cart' or method =='pxpy' or method=='cart' or method=='carteta' or method=='cartbox': # only apply this to pt
                 key1 = keys[i+1]
                 key2 = keys[i+2]
                 var1 = np.array(dataset.get(key1))[0:crop0]
@@ -68,12 +68,19 @@ class Scale_variables:
                     short = key.split('_')[0]
                     names = names + [short + '_px', short + '_py', short + '_pz']
                     arrays  = arrays + [px, py, pz]
-                elif method == 'cart':
+                elif method == 'cart' or method=='carteta' or method=='cartbox':
                     exist = exist_dict[key2]
-                    px, py, pz = Transform.cart1_transform(var, var1, var2, exist)
                     short = key.split('_')[0]
-                    names = names + [short + '_px', short + '_py', short + '_pz']
-                    arrays  = arrays + [px, py, pz]
+                    if method == 'cart':
+                        a,b,c = Transform.cart1_transform(var, var1, var2, exist)
+                        names = names + [short + '_px', short + '_py', short + '_pz']
+                    elif method == 'cartbox':
+                        a,b,c = Transform.cart3_transform(var, var1, var2, self.boxcox_ptlamb, exist)
+                        names = names + [short + '_px', short + '_py', short + '_eta']
+                    else:
+                        a,b,c = Transform.cart2_transform(var, var1, var2, exist)
+                        names = names + [short + '_px', short + '_py', short + '_eta']
+                    arrays  = arrays + [a,b,c]
                 else:
                     px, py, eta = Transform.pxpy(var, var1, var2)
                     short = key.split('_')[0]
@@ -161,12 +168,18 @@ class Scale_variables:
                 total.append(Transform.invphi4_transform((zsin, zcos), max0, mean, exist))
                 i+=2
                 j+=1
-            elif method == 'raw_cart' or method == 'pxpy' or method == 'cart':
+            elif method == 'raw_cart' or method == 'pxpy' or method == 'cart' or method == 'carteta' or method=='cartbox':
                 a, b, c = arrays[:,i], arrays[:,i+1], arrays[:,i+2]
                 if method == 'raw_cart':
                     pt, eta, phi = Transform.cart_to_polar(a, b, c)
                 elif method == 'pxpy':
                     pt, eta, phi = Transform.inv_pxpy(a, b, c)
+                elif method=='cartbox':
+                    exist = exist_dict[keys[j+2]]
+                    pt, eta, phi = Transform.inv_cart3_transform(a,b,c,self.boxcox_ptlamb,exist)
+                elif method =='carteta':
+                    exist = exist_dict[keys[j+2]]
+                    pt, eta, phi = Transform.inv_cart2_transform(a,b,c,exist)
                 else:
                     exist = exist_dict[keys[j+2]]
                     pt, eta, phi = Transform.inv_cart1_transform(a,b,c,exist)
@@ -229,34 +242,7 @@ class Scale_variables:
         diff = np.max(np.abs(orig - inverse))
         return diff
 
-class Shape_timesteps:
-    def __init__(self):
-        self.num_jet_features = None
-        self.num_jets = None
-        self.num_other_Xfeatures = None
-        self.num_Ytimesteps = None
-        self.num_Yfeatures = None
-    
-    def create_mask(self):
-        exist = Utilities.jet_existence_dict()
-        mask = [exist[list(exist.keys())[i]] for i in range(num_jets)] 
-        samples_jets = np.stack(mask,axis=1)
-        samples_jets = samples_jets.reshape((samples_jets.shape[0], samples_jets.shape[1], 1))
-        return np.repeat(samples_jets, self.num_jet_features, axis=2) # 5 feature mask
-    
-    def reshape_X(self, X_total, X_names, timestep_other=False):
-        jet_names = list(filter(lambda a: bool(re.match('^j[0-9]+$', a.split('_')[0])), X_names))
-        other_names = list(filter(lambda a: a not in jet_names, X_names))
-        self.num_jet_features = len(list(filter(lambda a: a.split('_')[0]=='j1',jet_names)))
-        self.num_jets = len(jet_names)/self.num_jet_features
-        self.num_other_Xfeatures = len(other_names)
-        # mask = self.create_mask()
-        X_jets = X_total[:, 0:len(jet_names)]
-        X_other = X_total[:, len(jet_names):]
-        X_timestep_jets = np.stack(np.split(X_jets, self.num_jets, axis=1), axis=1)
-        if timestep_other:
-            X_other = X_other.reshape(X_other.shape[0], 1, X_other.shape[1])
-        return X_timestep_jets, X_other
+
         
 
 

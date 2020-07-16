@@ -32,6 +32,39 @@ class Transform:
         phi =  (phi + lep_phi*exist) % (2*np.pi)
         phi = phi - 2*np.pi*(phi > np.pi)
         return pt, eta, phi
+    
+    def cart2_transform(pt, eta, phi, exist):
+        phi = (phi - lep_phi*exist) % (2*np.pi)
+        px = pt*np.cos(phi)
+        py = pt*np.sin(phi)
+        return px, py, eta
+        
+    def inv_cart2_transform(px, py, eta, exist): 
+        pt = np.sqrt(px**2 + py**2)
+        phi = np.arctan2(py, px)
+        p1 = pt + (pt==0)
+        # eta = np.arcsinh(pz/p1)*(pt>0)
+        phi =  (phi + lep_phi*exist) % (2*np.pi)
+        phi = phi - 2*np.pi*(phi > np.pi)
+        return pt, eta, phi
+    
+    def cart3_transform(pt, eta, phi, lamb, exist):
+        pt1 = boxcox1p(pt, lamb) 
+        phi = (phi - lep_phi*exist) % (2*np.pi)
+        px = pt1*np.cos(phi)
+        py = pt1*np.sin(phi)
+        return px, py, eta
+        
+    def inv_cart3_transform(px, py, eta, lamb, exist): 
+        pt1 = np.sqrt(px**2 + py**2)
+        phi = np.arctan2(py, px)
+        p1 = pt1 + (pt1==0)
+        # eta = np.arcsinh(pz/p1)*(pt>0)
+        phi =  (phi + lep_phi*exist) % (2*np.pi)
+        phi = phi - 2*np.pi*(phi > np.pi)
+        pt = inv_boxcox1p(pt1, lamb)
+        return pt, eta, phi
+    
         
     def pxpy(pt, eta, phi):
         px = pt*np.cos(phi)

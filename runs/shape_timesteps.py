@@ -35,3 +35,14 @@ class Shape_timesteps:
         if timestep_other:
             X_other = X_other.reshape(X_other.shape[0], X_other.shape[1], 1)
         return X_timestep_jets, X_other
+    
+    def reshape_Y(self, Y_total, Y_names):
+        self.num_Yfeatures = len(list(filter(lambda a: a.split('_')[0] == Y_names[0].split('_')[0], Y_names)))
+        self.num_Ytimesteps = len(Y_names)/self.num_Yfeatures
+        Y_timestepped = Y_total.reshape(Y_total.shape[0], self.num_Ytimesteps, self.num_Yfeatures) 
+        return Y_timestepped 
+    
+    def reshape_X_single(self, X_total, X_names):
+        totalX_jets, totalX_other = self.reshape_X(X_total, X_names, True,True)
+        totalX_other = totalX_other.reshape(totalX_other.shape[0], 1, -1)
+        return np.concatenate([totalX_other, totalX_jets], axis=1)

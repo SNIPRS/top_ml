@@ -1,13 +1,11 @@
 import numpy as np
 import re
-
-
 from __main__ import *
 
 from transform import Transform 
 from utilities import Utilities 
 
-
+lep_phi = np.array(dataset.get('lep_phi'))[0:crop0]
     
 # method_map = {'sincos': Transform.phi3_transform, 'linear_sincos': Transform.phi4_transform,
 #              'divmax': Transform.pt_transform, 'meanmax': Transform.meanmax_transform,
@@ -24,12 +22,13 @@ class Scale_variables:
     def __init__(self):
         self.maxmean_dict = Utilities.get_maxmean_dict()
         self.boxcox_max = {}
-        self.boxcox_ptlamb = 1.4
+        self.boxcox_ptlamb = 0.6
         self.boxcox_mlamb = -1
+        self.exist_dict = Utilities.jet_existence_dict()
     
     def final_maxmean(self,array, names):
         orig = array
-        phis = np.array([1 if 'phi' in name else 0 for name in names])
+        phis = np.array([1 if 'phi' in name or 'isbtag' in name else 0 for name in names])
         
         means = np.mean(array, axis=0)
         array = array - means
@@ -41,7 +40,7 @@ class Scale_variables:
         return (array, maxmean) 
 
     def inverse_final_maxmean(self, array, maxmean0, names):
-        phis = np.array([1 if 'phi' in name else 0 for name in names])
+        phis = np.array([1 if 'phi' in name or 'isbtag' in name else 0 for name in names])
         z = array*maxmean0[:,0] + maxmean0[:,1]
         z = z*(1-phis) + array*phis
         return z
@@ -49,7 +48,7 @@ class Scale_variables:
     def scale_arrays(self, keys, methods, end_maxmean):
         maxmean_dict = self.maxmean_dict 
         names = []
-        exist_dict = Utilities.jet_existence_dict()
+        exist_dict = self.exist_dict
         lep_phi = np.array(dataset.get('lep_phi'))[0:crop0]
     
         arrays = []
@@ -133,7 +132,7 @@ class Scale_variables:
                         z, maxbox = Transform.boxcox_transform(var, lamb)
                         self.boxcox_max[key] = maxbox
                     else:
-                        raise NotImplementedError(method + " " + key)
+                        z = var
                     arrays.append(z)
                     names.append(key)
                 i += 1 
@@ -152,7 +151,7 @@ class Scale_variables:
         mult_array = np.array([10 if 'phi' in name else 1 for name in names])
         arrays = arrays*mult_array 
         arrays = self.inverse_final_maxmean(arrays, maxmean0, names)
-        exist_dict = Utilities.jet_existence_dict()
+        exist_dict = self.exist_dict
         total = []
         i = 0
         j = 0
@@ -178,6 +177,7 @@ class Scale_variables:
                     exist = exist_dict[keys[j+2]]
                     pt, eta, phi = Transform.inv_cart3_transform(a,b,c,self.boxcox_ptlamb,exist)
                 elif method =='carteta':
+
                     exist = exist_dict[keys[j+2]]
                     pt, eta, phi = Transform.inv_cart2_transform(a,b,c,exist)
                 else:
@@ -229,7 +229,7 @@ class Scale_variables:
                         lamb = self.boxcox_mlamb
                     total.append(Transform.invboxcox_transform(z, lamb, maxbox, exist=None))
                 else:
-                    raise NotImplementedError(method + " " + key)
+                    total.append(z)
                 i+=1
                 j+=1
         return np.stack(total,axis=1)
@@ -242,37 +242,18 @@ class Scale_variables:
         diff = np.max(np.abs(orig - inverse))
         return diff
 
+    #                     def inv_cart2_transform(px, py, eta, exist): 
+#                         lep_phi = np.array(dataset.get('lep_phi'))[0:crop0]
+#                         lep_phi = np.delete(lep_phi, crop_pos)
+#                         print(exist.shape)
+#                         print(lep_phi.shape)
+#                         pt = np.sqrt(px**2 + py**2)
+#                         phi = np.arctan2(py, px)
+#                         p1 = pt + (pt==0)
+#                         # eta = np.arcsinh(pz/p1)*(pt>0)
+#                         phi =  (phi + lep_phi*exist) % (2*np.pi)
+#                         phi = phi - 2*np.pi*(phi > np.pi)
+#                         return pt, eta, phi
 
         
-
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-       
-    
-    
-
 

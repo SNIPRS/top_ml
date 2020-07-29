@@ -1,8 +1,11 @@
-from __main__ import * 
+import numpy as np 
 from scipy.special import boxcox1p
 from scipy.special import inv_boxcox1p
+from __main__ import crop0
+import h5py
+dataset = h5py.File('./../../../../../data/hongtao/variables_tt_re2.h5','r')
 lep_phi = np.array(dataset.get('lep_phi'))[0:crop0]
-    
+
 class Transform:
     def polar_to_cart(pt, eta, phi):
         px = pt*np.cos(phi)
@@ -40,6 +43,7 @@ class Transform:
         return px, py, eta
         
     def inv_cart2_transform(px, py, eta, exist): 
+        lep_phi = np.array(dataset.get('lep_phi'))[0:crop0]
         pt = np.sqrt(px**2 + py**2)
         phi = np.arctan2(py, px)
         p1 = pt + (pt==0)
@@ -50,7 +54,7 @@ class Transform:
     
     def cart3_transform(pt, eta, phi, lamb, exist):
         pt1 = boxcox1p(pt, lamb) 
-        phi = (phi - lep_phi*exist) % (2*np.pi)
+#         phi = (phi - lep_phi*exist) % (2*np.pi)
         px = pt1*np.cos(phi)
         py = pt1*np.sin(phi)
         return px, py, eta
@@ -59,13 +63,11 @@ class Transform:
         pt1 = np.sqrt(px**2 + py**2)
         phi = np.arctan2(py, px)
         p1 = pt1 + (pt1==0)
-        # eta = np.arcsinh(pz/p1)*(pt>0)
-        phi =  (phi + lep_phi*exist) % (2*np.pi)
-        phi = phi - 2*np.pi*(phi > np.pi)
+#         phi =  (phi + lep_phi*exist) % (2*np.pi)
+#         phi = phi - 2*np.pi*(phi > np.pi)
         pt = inv_boxcox1p(pt1, lamb)
         return pt, eta, phi
     
-        
     def pxpy(pt, eta, phi):
         px = pt*np.cos(phi)
         py = pt*np.sin(phi)
@@ -75,6 +77,28 @@ class Transform:
         pt = np.sqrt(px**2 + py**2)
         phi = np.arctan2(py, px)
         return pt, eta, phi
+    
+    def cart_pt_transform(pt, eta, phi, lamb):
+        ptbox = boxcox1p(pt+30, lamb)
+        px = pt*np.cos(phi)
+        py = pt*np.sin(phi)
+        return ptbox,px,py,eta
+    
+    def inv_cart_pt_transform(ptbox,px,py,eta, lamb):
+        pt = inv_boxcox1p(ptbox, lamb)-30
+        phi = np.arctan2(py, px)
+        return pt, eta, phi 
+    
+#     def boxcox_transform(arr, lamb, mean=None, exist=None):
+#         box = boxcox1p(arr + 30, lamb)
+#         maxbox = np.max(box)
+#         z = box/maxbox
+#         return (z, maxbox)
+
+#     def invboxcox_transform(z, lamb, maxbox, exist=None):
+#         box = z*maxbox
+#         arr = inv_boxcox1p(box, lamb)
+#         return arr - 30 
         
     def phi_transform(arr, max0, mean, exist=None):
         arr = (arr-mean)

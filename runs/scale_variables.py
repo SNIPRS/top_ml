@@ -22,7 +22,7 @@ class Scale_variables:
     def __init__(self):
         self.maxmean_dict = Utilities.get_maxmean_dict()
         self.boxcox_max = {}
-        self.boxcox_ptlamb = 0.6
+        self.boxcox_ptlamb = 1
         self.boxcox_mlamb = -1
         self.exist_dict = Utilities.jet_existence_dict()
     
@@ -85,6 +85,16 @@ class Scale_variables:
                     short = key.split('_')[0]
                     names = names + [short + '_px', short + '_py', short + '_eta']
                     arrays  = arrays + [px, py, eta]
+                i+=3
+            elif method=='cart_pt':
+                key1 = keys[i+1]
+                key2 = keys[i+2]
+                var1 = np.array(dataset.get(key1))[0:crop0]
+                var2 = np.array(dataset.get(key2))[0:crop0]
+                ptbox,px,py,eta = Transform.cart_pt_transform(var,var1,var2,self.boxcox_ptlamb)
+                short = key.split('_')[0]
+                names = names + [short + '_ptbox', short + '_px', short + '_py', short + '_eta']
+                arrays = arrays + [ptbox, px, py, eta]
                 i+=3
             else:
                 if method == 'sincos':
@@ -153,8 +163,8 @@ class Scale_variables:
         arrays = self.inverse_final_maxmean(arrays, maxmean0, names)
         exist_dict = self.exist_dict
         total = []
-        i = 0
-        j = 0
+        i = 0 # counter for arrays
+        j = 0 # counter for methods
         while j < len(methods):
             full_key = names[i]
             key = names[i].split('_')[1]
@@ -192,6 +202,12 @@ class Scale_variables:
                 total = total + [pt, eta, phi]
                 i+= 3
                 j+= 3
+            elif method =='cart_pt':
+                ptbox, px,py,pz = arrays[:,i], arrays[:,i+1], arrays[:,i+2], arrays[:,i+3]
+                pt, eta, phi = Transform.inv_cart_pt_transform(ptbox, px,py,pz,self.boxcox_ptlamb)
+                total = total + [pt, eta, phi]
+                i+=4
+                j+=3
             elif method == 'linear_sincos_orig': 
                 max0, mean = maxmean_dict['phi']
                 exist = exist_dict[full_key.split('-')[0]]

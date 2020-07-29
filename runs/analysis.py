@@ -104,5 +104,32 @@ class Analysis:
             plt.xlabel('True')
             plt.title(names[i])
             plt.ylabel('Predicted')
-            
+    
+    def predicted_vs_true_hist(compare, true, names, wrap_phi):
+        plt.figure(figsize=(Analysis.fsize*2,Analysis.fsize*len(names)))
+        for i in range(len(names)):
+            plt.subplot(len(names), 1, i+1)
+            y = compare[:, i]
+            x = true[:, i]
+            ylow = np.min(y)
+            yhigh = np.max(y) 
+            ybins = np.linspace(ylow, yhigh, Analysis.histogram_bins).reshape((1,-1))
+            xbins = np.linspace(np.min(x), np.max(x), Analysis.histogram_bins) 
+            dhist, _ = np.histogram(x, ybins)
+            dhist = (xhist>0) + (xhist==0)
+            dhist = dhist.reshape((1,-1))
+            hist = np.hist2d(x,y,[xbins,ybins])
+            nhist = hist/dhist*100
+            xcenter = (xbins[1:] + xbins[:-1])/2
+            ycenter = (ybins[1:] + ybins[:-1])/2
+            plt.hist2d(xcenter, ycenter, bins=[xbins,ybins], weights=nhist, cmap=plt.cm.jet)
+            plt.colorbar()
+            plt.xlabel('True')
+            plt.title(names[i])
+            plt.ylabel('Predicted')
+        
+        
+        
+        
+    
             

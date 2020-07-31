@@ -22,7 +22,7 @@ class Scale_variables:
     def __init__(self):
         self.maxmean_dict = Utilities.get_maxmean_dict()
         self.boxcox_max = {}
-        self.boxcox_ptlamb = 1
+        self.boxcox_ptlamb = 0.4
         self.boxcox_mlamb = -1
         self.exist_dict = Utilities.jet_existence_dict()
     
@@ -86,12 +86,16 @@ class Scale_variables:
                     names = names + [short + '_px', short + '_py', short + '_eta']
                     arrays  = arrays + [px, py, eta]
                 i+=3
-            elif method=='cart_pt':
+            elif method=='cart_pt' or method=='cart_linear':
                 key1 = keys[i+1]
                 key2 = keys[i+2]
+                exist = exist_dict[key2]
                 var1 = np.array(dataset.get(key1))[0:crop0]
                 var2 = np.array(dataset.get(key2))[0:crop0]
-                ptbox,px,py,eta = Transform.cart_pt_transform(var,var1,var2,self.boxcox_ptlamb)
+                if method=='cart_pt':
+                    ptbox,px,py,eta = Transform.cart_pt_transform(var,var1,var2,self.boxcox_ptlamb)
+                else:
+                    ptbox,px,py,eta = Transform.cart_linear_transform(var,var1,var2,self.boxcox_ptlamb,exist)
                 short = key.split('_')[0]
                 names = names + [short + '_ptbox', short + '_px', short + '_py', short + '_eta']
                 arrays = arrays + [ptbox, px, py, eta]
@@ -187,7 +191,6 @@ class Scale_variables:
                     exist = exist_dict[keys[j+2]]
                     pt, eta, phi = Transform.inv_cart3_transform(a,b,c,self.boxcox_ptlamb,exist)
                 elif method =='carteta':
-
                     exist = exist_dict[keys[j+2]]
                     pt, eta, phi = Transform.inv_cart2_transform(a,b,c,exist)
                 else:
@@ -202,9 +205,13 @@ class Scale_variables:
                 total = total + [pt, eta, phi]
                 i+= 3
                 j+= 3
-            elif method =='cart_pt':
+            elif method =='cart_pt' or method=='cart_linear':
+                exist = exist_dict[keys[j+2]]
                 ptbox, px,py,pz = arrays[:,i], arrays[:,i+1], arrays[:,i+2], arrays[:,i+3]
-                pt, eta, phi = Transform.inv_cart_pt_transform(ptbox, px,py,pz,self.boxcox_ptlamb)
+                if method=='cart_pt':
+                    pt, eta, phi = Transform.inv_cart_pt_transform(ptbox, px,py,pz,self.boxcox_ptlamb)
+                else:
+                    pt, eta, phi = Transform.inv_cart_linear_transform(ptbox, px,py,pz,self.boxcox_ptlamb,exist)
                 total = total + [pt, eta, phi]
                 i+=4
                 j+=3

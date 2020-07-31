@@ -78,6 +78,25 @@ class Transform:
         phi = np.arctan2(py, px)
         return pt, eta, phi
     
+    def cart_linear_transform(pt, eta, phi, lamb, exist):
+        phi = (phi - lep_phi*exist) % (2*np.pi)
+        sinl = 2/np.pi*np.arcsin(np.sin(phi))
+        cosl = 2/np.pi*np.arcsin(np.cos(phi))
+        ptbox = boxcox1p(pt, lamb)
+        px = pt*cosl
+        py = pt*sinl
+        return ptbox,px,py,eta
+    
+    def inv_cart_linear_transform(ptbox,px,py,eta, lamb, exist):
+        pt = inv_boxcox1p(ptbox, lamb)
+        cosl, sinl = px/pt, py/pt
+        sin, cos = np.sin(np.pi/2*sinl),  np.sin(np.pi/2*cosl)
+        phi = np.arctan2(sin, cos)
+        phi = (phi + lep_phi*exist) % (2*np.pi)
+        phi = phi - 2*np.pi*(phi > np.pi)
+        return pt, eta, phi 
+    
+
     def cart_pt_transform(pt, eta, phi, lamb):
         ptbox = boxcox1p(pt+30, lamb)
         px = pt*np.cos(phi)
@@ -87,19 +106,8 @@ class Transform:
     def inv_cart_pt_transform(ptbox,px,py,eta, lamb):
         pt = inv_boxcox1p(ptbox, lamb)-30
         phi = np.arctan2(py, px)
-        return pt, eta, phi 
+        return pt, eta, phi
     
-#     def boxcox_transform(arr, lamb, mean=None, exist=None):
-#         box = boxcox1p(arr + 30, lamb)
-#         maxbox = np.max(box)
-#         z = box/maxbox
-#         return (z, maxbox)
-
-#     def invboxcox_transform(z, lamb, maxbox, exist=None):
-#         box = z*maxbox
-#         arr = inv_boxcox1p(box, lamb)
-#         return arr - 30 
-        
     def phi_transform(arr, max0, mean, exist=None):
         arr = (arr-mean)
         arr = arr/max0/1.01/2+0.5

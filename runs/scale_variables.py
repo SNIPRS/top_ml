@@ -28,21 +28,21 @@ class Scale_variables:
     
     def final_maxmean(self,array, names):
         orig = array
-        phis = np.array([1 if 'phi' in name or 'isbtag' in name else 0 for name in names])
+        dont = np.array([1 if 'phi' in name or 'isbtag' in name or 'DL1r' in name else 0 for name in names])
         
         means = np.mean(array, axis=0)
         array = array - means
         maxs = np.max(np.abs(array), axis=0)
         maxs = maxs + (maxs==0.0)*1
         array = array/maxs
-        array = array*(1-phis) + orig*phis
+        array = array*(1-dont) + orig*dont
         maxmean = np.stack([maxs, means], axis=1)
         return (array, maxmean) 
 
     def inverse_final_maxmean(self, array, maxmean0, names):
-        phis = np.array([1 if 'phi' in name or 'isbtag' in name else 0 for name in names])
+        dont = np.array([1 if 'phi' in name or 'isbtag' in name or 'DL1r' in name else 0 for name in names])
         z = array*maxmean0[:,0] + maxmean0[:,1]
-        z = z*(1-phis) + array*phis
+        z = z*(1-dont) + array*dont
         return z
 
     def scale_arrays(self, keys, methods, end_maxmean):
@@ -101,10 +101,13 @@ class Scale_variables:
                 arrays = arrays + [ptbox, px, py, eta]
                 i+=3
             else:
-                if method == 'sincos':
+                if method == 'sincos' or method=='orig_sincos':
                     max0, mean = None, None
                     exist = exist_dict[key]
-                    zsin, zcos = Transform.phi4_transform(var, max0, mean, exist)
+                    if method=='sincos': 
+                        zsin, zcos = Transform.phi4_transform(var, max0, mean, exist)
+                    else:
+                        zsin, zcos = Transform.phi5_transform(var, max0, mean, exist)
                     arrays.append(zsin)
                     arrays.append(zcos)
                     names.append(key +'-sin')
@@ -145,6 +148,8 @@ class Scale_variables:
                             lamb = self.boxcox_mlamb
                         z, maxbox = Transform.boxcox_transform(var, lamb)
                         self.boxcox_max[key] = maxbox
+                    elif method == 'DL1r':
+                        z = Transform.DL1r_transform(var)
                     else:
                         z = var
                     arrays.append(z)
@@ -173,12 +178,15 @@ class Scale_variables:
             full_key = names[i]
             key = names[i].split('_')[1]
             method = methods[j]
-            if method == 'sincos' or method=='cos_linear_sin':
+            if method == 'sincos' or method=='cos_linear_sin' or method=='orig_sincos':
                 max0, mean = maxmean_dict['phi']
                 exist = exist_dict[full_key.split('-')[0]]
                 zsin = arrays[:,i]
                 zcos = arrays[:,i+1]
-                total.append(Transform.invphi4_transform((zsin, zcos), max0, mean, exist))
+                if method=='orig_sincos':
+                    total.append(Transform.invphi5_transform((zsin, zcos), max0, mean, exist))
+                else:
+                    total.append(Transform.invphi4_transform((zsin, zcos), max0, mean, exist))
                 i+=2
                 j+=1
             elif method == 'raw_cart' or method == 'pxpy' or method == 'cart' or method == 'carteta' or method=='cartbox':
@@ -251,6 +259,8 @@ class Scale_variables:
                     else:
                         lamb = self.boxcox_mlamb
                     total.append(Transform.invboxcox_transform(z, lamb, maxbox, exist=None))
+                elif method == 'DL1r':
+                    total.append(Transform.inv_DL1r_transform(z))
                 else:
                     total.append(z)
                 i+=1

@@ -180,20 +180,34 @@ class Transform:
     
     def phi5_transform(arr, max0, mean, exist):
         w = (arr - lep_phi*exist) % (2*np.pi)
-        w = w -2*np.pi*(w>np.pi)
-        sin = 2/np.pi*np.arcsin(np.sin(w)) - 1.2*(1-exist)
-        cos = 2/np.pi*np.arcsin(np.cos(w)) - 2.2*(1-exist)
-        return (sin, cos, w)
+        sin = np.sin(w) - 1.2*(1-exist)
+        cos = np.cos(w) - 2.2*(1-exist)
+        return (sin, cos)
 
     def invphi5_transform(z, max0, mean, exist):
         pi = np.pi
-        sin, cos, w0 = z[0] + 1.2*(1-exist), z[1] + 2.2*(1-exist), z[2]
-        sin0, cos0 = np.sin(pi/2*sin),  np.sin(pi/2*cos)
-        w = np.arctan2(sin0, cos0)
-        w = (w + w0)/2
+        sin, cos = z[0] + 1.2*(1-exist), z[1] + 2.2*(1-exist)
+        w = np.arctan2(sin, cos)
         x = (w + lep_phi*exist) % (2*pi)
         x = x-2*np.pi*(x>pi)
         return x
+    
+#     def phi5_transform(arr, max0, mean, exist):
+#         w = (arr - lep_phi*exist) % (2*np.pi)
+#         w = w -2*np.pi*(w>np.pi)
+#         sin = 2/np.pi*np.arcsin(np.sin(w)) - 1.2*(1-exist)
+#         cos = 2/np.pi*np.arcsin(np.cos(w)) - 2.2*(1-exist)
+#         return (sin, cos, w)
+
+#     def invphi5_transform(z, max0, mean, exist):
+#         pi = np.pi
+#         sin, cos, w0 = z[0] + 1.2*(1-exist), z[1] + 2.2*(1-exist), z[2]
+#         sin0, cos0 = np.sin(pi/2*sin),  np.sin(pi/2*cos)
+#         w = np.arctan2(sin0, cos0)
+#         w = (w + w0)/2
+#         x = (w + lep_phi*exist) % (2*pi)
+#         x = x-2*np.pi*(x>pi)
+#         return x
     
     def phi6_transform(arr, max0, mean, exist):
         arr = arr - np.pi
@@ -214,6 +228,11 @@ class Transform:
         x = x-2*np.pi*(x>pi)
         return x
     
+    def DL1r_transform(arr):
+        return (arr+9.718866348266602)/(9.718866348266602 + 18.004295349121094)
+    
+    def inv_DL1r_transform(arr):
+        return arr*(9.718866348266602 + 18.004295349121094) - 9.718866348266602
     
     def pt_transform(arr, max0, mean=None, exist=None):
         return arr/max0
